@@ -208,7 +208,7 @@ function relation_field_formatter_view($entity_type, $entity, $field, $instance,
 /**
  * Implements hook_field_formatter_prepare_view().
  */
-function relation_field_formatter_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items, $displays) {
+function relation_field_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items, $displays) {
   $entities_to_load = array();
   foreach ($items as $key => $item) {
     foreach ($item as $delta => $value) {
