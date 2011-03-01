@@ -129,6 +129,58 @@ function relation_field_instance_delete($instance) {
 }
 
 /**
+ * Implements hook_field_validate().
+ */
+function relation_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  foreach ($items as $delta => $item) {
+    $other = entity_load($item['other_entity_type'], array($item['other_entity_id']));
+    // Check that $other entity exists.
+    if (empty($other)) {
+      $errors[$field['field_name']][$langcode][$delta][] = array(
+        'error' => 'relation_error_missing_other_entity',
+        'message' => t('The %type entity %id does not exist.', array(
+          '%type' => $item['other_entity_type'],
+          '%id' => $item['other_entity_id'])
+        ),
+      );
+      continue;
+    }
+    // Check that $other's bundle has the field attached.
+    if (!isset($other[$item['other_entity_id']]->{$field['field_name']})) {
+      $errors[$field['field_name']][$langcode][$delta][] = array(
+        'error' => 'relation_error_missing_field',
+        'message' =>  t('The %bundle bundle does not have a %field_name field attached.', array(
+          '%bundle' => $other[$item['other_entity_id']]->type,
+          '%field_name' =>  $field['field_name'])
+        ),
+      );
+      continue;
+    }
+    // Check that number of fields on $other is < cardinality.
+    if ($field['cardinality'] != -1 && count($other[0]->{fieldset}[$langcode] >= $field['cardinality'] )) {
+      // Check and see if one of the fields on $other is refering back to $entity.
+      $exists = FALSE;
+      foreach ($other[0]->{fieldset}[$langcode] as $value) {
+        if ($value['other_entity_id'] == $item['other_entity_type']) {
+          $exists = TRUE;
+          break;
+        }
+      }
+      if (!$exists) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'relation_error_missing_field',
+          'message' =>  t('The %type entity %id is all full up. If you want to add more relations to it, you need to increase the field cardinality.', array(
+            '%type' => $item['other_entity_type'],
+            '%id' =>  $item['other_entity_id'])
+          ),
+        );
+        continue;
+      }
+    }
+  }
+}
+
+/**
  * Implements hook_field_widget_info().
  */
 function relation_field_widget_info() {
