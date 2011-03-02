@@ -9,32 +9,81 @@
 // @see http://drupal.org/node/977052
 require_once dirname(__FILE__) . '/relation.field.inc';
 
+function relation_menu() {
+  $menu = array();
+  
+  $menu['admin/relation/manage'] = array(
+    'title' => 'Relationships',
+    'description' => 'Relationships',
+    'page callback' => 'relation_manage',
+    'access arguments' => array('administer content types'),
+    'file' => 'relation.admin.inc',
+  );
+  
+  $menu['admin/relation/manage/%relation_menu_field'] = array(
+    'title' => 'A relationship',
+    'description' => 'Relationships',
+    'page callback' => 'relation_manage_relationship',
+    'page arguments' => array(3),
+    'access arguments' => array('administer content types'),
+    'file' => 'relation.admin.inc',
+  );
+  
+  return $menu;
+}
+
 /**
  * Implements hook_entity_info().
  */
 function relation_entity_info() {
-  return;
   $entities['relation'] = array(
     'label' => t('Relation'),
     'base table' => 'relation',
-    'fieldable' => FALSE,
+    'fieldable' => TRUE,
     'controller class' => 'RelationEntityController',
     'entity keys' => array(
       'id' => 'relation_id',
-      'bundle' => 'predicate',
+      'bundle' => 'field_name',
     ),
     'bundle keys' => array(
-      'bundle' => 'predicate',
+      'bundle' => 'field_name',
     ),
-    'bundles' => array(
-      // Describe Drupal's built-in relationships.
-      'creator' => array(
-        'label' => t('Author'),
-      ),
-    ),
+    'bundles' => array(),
     'view modes' => array(),
   );
+  
+  // Get fields of type relation
+  $fields = field_read_fields(array('type' => 'relation'));
+  
+  // Create a bundle for each field.
+  foreach ($fields as $field_name => $field) {
+    $entities['relation']['bundles'][$field_name] = array(
+      'label' => $field_name,
+      'admin' => array(
+        'path' => 'admin/relation/manage/%relation_menu_field',
+        'real path' => 'admin/relation/manage/' . $field_name,
+        'bundle argument' => 3,
+        'access arguments' => array('administer content types'),
+      ),
+    );
+  }
+  
   return $entities;
+}
+
+/**
+ * Check if a Field exists, and it matches a Field type.
+ * 
+ * @param string $field_name
+ * @param string $field_type
+ */
+function relation_menu_field_load($field_name, $field_type = 'relation') {
+  $field = field_read_field($field_name);
+  if ($field['type'] == $field_type) {
+    return $field_name;
+  } else {
+    return false;
+  }
 }
 
 /**
@@ -56,6 +105,7 @@ function relation_entity_info_alter(&$entity_info) {
  * Implements hook_field_info_alter().
  */
 function relation_field_info_alter(&$field_info) {
+  return;
   $field_info['file']['relationships']['files'] = array(
     'handler' => 'RelationFieldRelation',
   );
@@ -69,14 +119,16 @@ function relation_field_info_alter(&$field_info) {
  * right entities are identical.
  */
 class RelationEntityController extends DrupalDefaultEntityController {
+  /*
   protected function buildQuery($ids, $conditions = array(), $revision_id = FALSE) {
     $query = parent::buildQuery($ids, $conditions, $revision_id);
     _relation_entity_query_helper($query);
     return $query;
-  }
+  }*/
 }
 
 function _relation_entity_query_helper($query, $table, $field_name) {
+  return;
   $query->innerJoin($table, 'r', "l.{$field_name}_relation_id = r.{$field_name}_relation_id AND NOT (l.etid = r.etid AND l.entity_id = r.entity_id)");
   $query->addField('l', "{$field_name}_relation_id", 'relation_id');
   $query->addField('l', 'etid', 'left_etid');
