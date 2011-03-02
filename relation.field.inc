@@ -194,6 +194,12 @@ function relation_field_instance_delete($instance) {
  */
 function relation_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   foreach ($items as $delta => $item) {
+    // NOTE: $items passes all values, even if they are empty. 
+    //       It appears is_empty is not executed before field_validate..
+    if (relation_field_is_empty($item, $field)) {
+      continue;
+    }
+    
     $other = entity_load($item['other_entity_type'], array($item['other_entity_id']));
     // Check that $other entity exists.
     if (empty($other)) {
