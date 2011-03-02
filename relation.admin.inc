@@ -45,7 +45,7 @@ function relation_manage() {
     '#theme' => 'table',
     '#header' => $header,
     '#rows' => $rows,
-    '#empty' => t('No content types available. <a href="@link">Add content type</a>.', array('@link' => url('admin/structure/types/add'))),
+    '#empty' => t('No relationships available.'),
   );
   
   return $page;
