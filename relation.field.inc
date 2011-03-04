@@ -38,6 +38,7 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     return;
   }
 
+  //group relations by type
   $relations = array();
   foreach ($items as &$item) {
     // Create a new relation_id for new relations.
@@ -46,7 +47,43 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     }
     $relations[$item['other_entity_type']][$item['relation_id']] = $item['other_entity_id'];
   }
-
+  
+  //remove opposite ends of any field values that have been removed.
+  if (!isset($entity->relation_deletion_recursion)) {
+    $old_entity = entity_load_unchanged($entity_type, $id);
+    if (!empty($old_entity->{$field_name})) {
+    //group by entity_type
+    $old_relations = array();
+      foreach ($old_entity->{$field_name}[$langcode] as $old_item) {
+        $old_relations[$old_item['other_entity_type']][$old_item['relation_id']] = $old_item['other_entity_id'];
+      }
+    }
+    foreach ($old_relations as $other_type => $old_entity_relations) {
+      foreach ($old_entity_relations as $relation_id => $other_id) {
+        if (!isset($relations[$other_type][$relation_id])) {
+          //This doesn't seem optimal, but we probably waste more resources loading
+          //all entities, because few will be deleted. I think.
+          $others = entity_load($other_type, array($other_id));
+          $other = $others[$other_id];
+          foreach ($other->{$field_name}[$langcode] as $delta => $value)
+            if ($value['relation_id'] == $relation_id) {
+              unset($other->{$field_name}[$langcode][$delta]);
+            }
+          // Would be nice to not save here, and just do one save at the end...
+          // Prevent infinite recursion; ENTITY_save() calls hook_field_presave().
+          $other->relation_deletion_recursion = TRUE;
+          // @todo Entity module's entity_save() does not handle core entities yet.
+          // @see http://drupal.org/node/988780
+          $result = entity_save($other_type, $other);
+          if ($result === FALSE && function_exists($other_type . '_save')) {
+            $function = $other_type . '_save';
+            $function($other);
+          }
+        }
+      }
+    }
+  }
+  
   // $entity_relations describes relations from $entity. In general, $entity_
   // describes the entity being saved, $other_ describes entities on the other
   // end of the relation.
@@ -106,14 +143,38 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
  * referencing the deleted entity need to be updated to remove the relation(s).
  */
 function relation_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
-  list($entity_id) = entity_extract_ids($entity_type, $entity);
-  $result = db_query('SELECT relation_id FROM {relation_data} WHERE entity_type = :entity_type AND entity_id = :entity_id', array(
-    ':entity_type' => $entity_type,
-    ':entity_id' => $entity_id,
-  ));
-  foreach ($result as $row) {
-    db_delete('relation')->condition('relation_id', $row->relation_id)->execute();
-    db_delete('relation_data')->condition('relation_id', $row->relation_id)->execute();
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+
+  //group by entity type
+  $relations = array();
+  foreach ($items as $item) {
+    $relations[$item['other_entity_type']][$item['relation_id']] = $item['other_entity_id'];
+  }
+
+  foreach ($relations as $other_type => $entity_relations) {
+    $others = entity_load($other_type, $entity_relations);
+    //nothing to see here, move along.
+    if (!$others) {
+      continue;
+    }
+    foreach ($others as $other_id => $other) {
+      if (isset($other->{$field['field_name']}[$langcode])) {
+
+        //Delete relation on $other pointing back to $entity.
+        foreach ($other->{$field['field_name']}[$langcode] as $delta => $value) {
+          if ($value['other_entity_id'] = $id) {
+            unset($other->{$field['field_name']}[$langcode][$delta]);
+          }
+        }
+        // @todo Entity module's entity_save() does not handle core entities yet.
+        // @see http://drupal.org/node/988780
+        $result = entity_save($other_type, $other);
+        if ($result === FALSE && function_exists($other_type . '_save')) {
+          $function = $other_type . '_save';
+          $function($other);
+        }
+      }
+    }
   }
 }
 
