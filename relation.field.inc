@@ -95,10 +95,11 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     }
     foreach ($others as $other_id => $other) {
       // A new field instance on existing entities contains no structure yet.
-      if (!isset($other->{$field_name}[$langcode])) {
-        $other->{$field_name}[$langcode] = array();
+      $other_langcode = field_language($other_type, $other, $field_name);
+      if (!isset($other->{$field_name}[$other_langcode])) {
+        $other->{$field_name}[$other_langcode] = array();
       }
-      $other_items = &$other->{$field_name}[$langcode];
+      $other_items = &$other->{$field_name}[$other_langcode];
 
       // Transform current relations on the other into a lookup map keyed by
       // relation_id.
