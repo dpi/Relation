@@ -165,42 +165,16 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
 /**
  * Implements hook_field_delete().
  *
- * This hook is invoked when an entity is deleted. All entities that are
+ * This hook is invoked when an invidiual Entity is deleted. All entities that are
  * referencing the deleted entity need to be updated to remove the relation(s).
  */
 function relation_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
-  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
-  //group by entity type
-  $relations = array();
-  foreach ($items as $item) {
-    $relations[$item['other_entity_type']][$item['relation_id']] = $item['other_entity_id'];
-  }
-
-  foreach ($relations as $other_type => $entity_relations) {
-    $others = entity_load($other_type, $entity_relations);
-    //nothing to see here, move along.
-    if (!$others) {
-      continue;
-    }
-    foreach ($others as $other_id => $other) {
-      if (isset($other->{$field['field_name']}[$langcode])) {
-
-        //Delete relation on $other pointing back to $entity.
-        foreach ($other->{$field['field_name']}[$langcode] as $delta => $value) {
-          if ($value['other_entity_id'] = $id) {
-            unset($other->{$field['field_name']}[$langcode][$delta]);
-          }
-        }
-        // @todo Entity module's entity_save() does not handle core entities yet.
-        // @see http://drupal.org/node/988780
-        $result = entity_save($other_type, $other);
-        if ($result === FALSE && function_exists($other_type . '_save')) {
-          $function = $other_type . '_save';
-          $function($other);
-        }
-      }
-    }
+  $field_name = $field['field_name'];
+  // Delete all references to this item, from other Entities.
+  // Entities this Entity is referencing will be deleted by Field API.
+  foreach ($items as &$item) {
+    $entity_db = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
+    _relation_delete_relation($item['other_entity_type'], $entity_db, $item['relation_id'], $field_name);
   }
 }
 
