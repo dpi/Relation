@@ -227,13 +227,13 @@ function relation_field_delete($entity_type, $entity, $field, $instance, $langco
 }
 
 /**
- * Implements hook_field_instance_delete().
+ * Implements hook_field_delete_instance().
  *
  * This hook is invoked after a field instance has been marked for deletion.
  * This means that an entire relation endpoint has been removed, so all
  * relations to entities of the field instance need to be deleted.
  */
-function relation_field_instance_delete($instance) {
+function relation_field_delete_instance($instance) {
   // @todo
 }
 
