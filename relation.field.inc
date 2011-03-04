@@ -28,7 +28,65 @@ function relation_field_is_empty($item, $field) {
 }
 
 /**
+ * Checks if an entity contains a relation.
+ * 
+ * @param $entity
+ *   Search an entity for a relationship.
+ * @param  $relation_id
+ *   The relation ID to look for.
+ * @param  $field_name
+ *   The field name of a Relation -type field.
+ * 
+ * @return
+ *   BOOLEAN
+ */
+function _relation_entity_has_relation($entity, $relation_id, $field_name) {
+  foreach ($entity->{$field_name} as $lang => $items) {
+    foreach ($items as $delta => $item) {
+      if ($item['relation_id'] == $relation_id) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Remove a relationship from an Entity.
+ * 
+ * @param $entity
+ *   An entity to remove a relation from. It is recommended that $entity 
+ *   be obtained straight from the database by calling entity_load_unchanged().
+ *   This ensures that the data has not gone through any processing, especially
+ *   by Form and Field API.
+ * @param $relation_id
+ *   The Relation ID.
+ * @param $field_name
+ *   The field name of the Relation field.
+ */
+function _relation_delete_relation($entity_type, $entity, $relation_id, $field_name) {
+  foreach ($entity->{$field_name} as $lc => &$items) {
+    foreach ($items as $delta => &$item) {
+      if ($item['relation_id'] == $relation_id) {
+        unset($items[$delta]);
+      }
+    }
+  }
+  
+  // @todo: Figure out how to get around recursion issues.
+  $entity->relation_recursion = true;
+  entity_save($entity_type, $entity);
+}
+
+/**
  * Implements hook_field_presave().
+ * 
+ * We don't act apon the field data being submitted, instead we are reading
+ * the fields that are submitted, and creating a mirror opposite of the relationship
+ * on Relation field of entities that are submitted here.
+ * 
+ * Creation/deletion of Relation Entities are done here.
  */
 function relation_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
   $field_name = $field['field_name'];
@@ -37,100 +95,69 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
   if (isset($entity->relation_recursion)) {
     return;
   }
-
-  //group relations by type
-  $relations = array();
+    
+  // Track the current relationships. Used to diff with old relationships later.
+  $rid_new = array();
+  
+  /**
+   * Add relationship to opposite Entities.
+   */
   foreach ($items as &$item) {
-    // Create a new relation_id for new relations.
-    if (!isset($item['relation_id'])) {
+    // Relation is new
+    if (empty($item['relation_id'])) {
       $item['relation_id'] = db_next_id();
     }
-    $relations[$item['other_entity_type']][$item['relation_id']] = $item['other_entity_id'];
-  }
-  
-  //remove opposite ends of any field values that have been removed.
-  if (!isset($entity->relation_deletion_recursion)) {
-    $old_entity = entity_load_unchanged($entity_type, $id);
-    $old_relations = array();
-    if (!empty($old_entity->{$field_name})) {
-    //group by entity_type
-      foreach ($old_entity->{$field_name} as $old_entity_lang => $old_items) {
-        foreach ($old_items as $old_item) {
-          $old_relations[$old_item['other_entity_type']][$old_item['relation_id']] = $old_item['other_entity_id'];
-        }
-      }
-    }
-    foreach ($old_relations as $other_type => $old_entity_relations) {
-      foreach ($old_entity_relations as $relation_id => $other_id) {
-        if (!isset($relations[$other_type][$relation_id])) {
-          //This doesn't seem optimal, but we probably waste more resources loading
-          //all entities, because few will be deleted. I think.
-          $others = entity_load($other_type, array($other_id));
-          $other = $others[$other_id];
-          foreach ($other->{$field_name} as $other_lang => $other_items) {
-            foreach ($other_items as $delta => $value) {
-              if ($value['relation_id'] == $relation_id) {
-                unset($other->{$field_name}[$langcode][$delta]);
-              }
-            }
-          }
-          // Prevent infinite recursion; ENTITY_save() calls hook_field_presave().
-          $other->relation_deletion_recursion = TRUE;
-          $result = entity_save($other_type, $other);
-        }
-      }
-    }
-  }
-  
-  // $entity_relations describes relations from $entity. In general, $entity_
-  // describes the entity being saved, $other_ describes entities on the other
-  // end of the relation.
-  foreach ($relations as $other_type => $entity_relations) {
-    $others = entity_load($other_type, $entity_relations);
-    // @todo The else condition must not happen; implement hook_field_validate().
-    if (!$others) {
-      continue;
-    }
-    foreach ($others as $other_id => $other) {
-      // A new field instance on existing entities contains no structure yet.
-      $other_langcode = field_language($other_type, $other, $field_name);
-      if (!isset($other->{$field_name}[$other_langcode])) {
-        $other->{$field_name}[$other_langcode] = array();
-      }
-      $other_items = &$other->{$field_name}[$other_langcode];
-
-      // Transform current relations on the other into a lookup map keyed by
-      // relation_id.
-      $other_relations = array();
-      foreach ($other_items as $delta => $other_item) {
-        $other_relations[$other_item['relation_id']] = array(
-          'delta' => $delta,
-          'item' => $other_item,
-        );
-      }
-      // Add a new relation, if it does not exist yet.
-      foreach ($entity_relations as $relation_id => $other_entity_id) {
-        if (!isset($other_relations[$relation_id])) {
-          $other_items[] = array(
-            'relation_id' => $relation_id,
-            'other_entity_type' => $entity_type,
-            'other_entity_id' => $id,
-            // @todo Add optional revision_id handling.
-            // 'other_revision_id' => $vid,
-            'other_revision_id' => NULL,
-          );
-        }
-      }
-      // Prevent infinite recursion; ENTITY_save() calls hook_field_presave().
-      $other->relation_recursion = TRUE;
-      // @todo Entity module's entity_save() does not handle core entities yet.
-      // @see http://drupal.org/node/988780
-      $result = entity_save($other_type, $other);
-      if ($result === FALSE && function_exists($other_type . '_save')) {
-        $function = $other_type . '_save';
-        $function($other);
-      }
+    
+    $rid_new[$item['relation_id']] = array(
+    	'entity_type' => $item['other_entity_type'],
+    	'etid' => $item['other_entity_id'],
+    );
+    
+    $other = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
+    $other_langcode = field_language($item['other_entity_type'], $other, $field_name);
+    
+    if (false === _relation_entity_has_relation($other, $item['relation_id'], $field_name)) {
+      $other->{$field_name}[$other_langcode][] = array( 
+        'relation_id' => $item['relation_id'],
+        'other_entity_type' => $entity_type,
+        'other_entity_id' => $id,
+        'other_revision_id' => NULL,
+      );
+      
+      $other->relation_recursion = true;
+      $result = entity_save($item['other_entity_type'], $other);
       unset($other->relation_recursion);
+    }
+  }
+  
+  /**
+   * Users are allowed to recycle each relation on an entity, due to the attached fields.
+   * But if the Relation ID is no longer present, then we need to delete relation entities with it.
+   */
+  
+  // Get old relationships
+  $entity_db = entity_load_unchanged($entity_type, $id);
+  foreach ($entity_db->{$field_name} as $db_lc => &$db_items) {
+    foreach ($db_items as $db_delta => &$db_item) {
+      // Conditions for deleting opposite relationship:
+      $delete = false;
+      
+      // Delete relationships that no longer exist.
+      if (isset($rid_new[$db_item['relation_id']])) {
+        // Entity type has changed.
+        if ($rid_new[$db_item['relation_id']]['entity_type'] != $db_item['other_entity_type']) { $delete = true; }
+        // Entity ID has changed.
+        if ($rid_new[$db_item['relation_id']]['etid']        != $db_item['other_entity_id'])   { $delete = true; }
+      } else {
+        // @todo: Delete the Relation entity.
+        $delete = true;
+      }
+      
+      // A relationship has changed/removed. Delete relationship of other Entity.
+      if ($delete) {
+        $entity_rm = entity_load_unchanged($db_item['other_entity_type'], $db_item['other_entity_id']);
+        _relation_delete_relation($db_item['other_entity_type'], $entity_rm, $db_item['relation_id'], $field_name);
+      }
     }
   }
 }
