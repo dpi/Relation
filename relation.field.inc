@@ -28,7 +28,7 @@ function relation_field_is_empty($item, $field) {
 }
 
 /**
- * Checks if an entity contains a relation.
+ * Checks if an entity contains a relation ID.
  * 
  * @param $entity
  *   Search an entity for a relationship.
@@ -40,7 +40,7 @@ function relation_field_is_empty($item, $field) {
  * @return
  *   BOOLEAN
  */
-function _relation_entity_has_relation($entity, $relation_id, $field_name) {
+function _relation_entity_has_relation_id($entity, $relation_id, $field_name) {
   foreach ($entity->{$field_name} as $lang => $items) {
     foreach ($items as $delta => $item) {
       if ($item['relation_id'] == $relation_id) {
@@ -52,6 +52,33 @@ function _relation_entity_has_relation($entity, $relation_id, $field_name) {
   return false;
 }
 
+/**
+ * Checks if a Entity-type/Entity ID combination exists in an entity.
+ * 
+ * @param $entity
+ *   Search an entity for a relationship.
+ * @param $other_entity_type
+ *   The type the Entity to look for.
+ * @param $other_etid
+ *   The ID of the Entity to look for.
+ * @param $field_name
+ *   The field name of a Relation -type field.
+ * @param $langcode
+ *   The language to check against.
+ * @return
+ *   BOOLEAN
+ */
+function _relation_entity_has_relation($entity, $other_entity_type, $other_etid, $field_name, $langcode) {
+  if (isset($entity->{$field_name}[$langcode])) {
+    foreach ($entity->{$field_name}[$langcode] as $delta => $item) {
+      if ($item['other_entity_type'] == $other_entity_type && $item['other_entity_id'] == $other_etid) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
 /**
  * Remove a relationship from an Entity.
  * 
@@ -102,28 +129,38 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
   if (isset($entity->relation_recursion)) {
     return;
   }
-    
+  
+  $entity_db = entity_load_unchanged($entity_type, $id);
+  
   // Track the current relationships. Used to diff with old relationships later.
   $rid_new = array();
   
   /**
    * Add relationship to opposite Entities.
    */
-  foreach ($items as &$item) {
+  foreach ($items as $item_delta => &$item) {
     // Relation is new
-    if (empty($item['relation_id'])) {
-      $item['relation_id'] = db_next_id();
-    }
     
     $rid_new[$item['relation_id']] = array(
     	'entity_type' => $item['other_entity_type'],
     	'etid' => $item['other_entity_id'],
     );
     
-    $other = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
-    $other_langcode = field_language($item['other_entity_type'], $other, $field_name);
+    // Prevent duplicate relationships.
+    if (empty($item['relation_id'])) {
+      if (!_relation_entity_has_relation($entity_db, $item['other_entity_type'], $item['other_entity_id'], $field_name, $langcode)) {
+        $item['relation_id'] = db_next_id();
+      } else {
+        unset($items[$item_delta]);
+        continue;
+      }
+    }
     
-    if (false === _relation_entity_has_relation($other, $item['relation_id'], $field_name)) {
+    $other = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
+    
+    $other_langcode = $langcode;
+    
+    if (false === _relation_entity_has_relation_id($other, $item['relation_id'], $field_name)) {
       $other->{$field_name}[$other_langcode][] = array( 
         'relation_id' => $item['relation_id'],
         'other_entity_type' => $entity_type,
@@ -143,21 +180,24 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
    */
   
   // Get old relationships
-  $entity_db = entity_load_unchanged($entity_type, $id);
-  if (isset($entity_db->{$field_name}[$langcode])) {
-    foreach ($entity_db->{$field_name}[$langcode] as $db_delta => &$db_item) {
+  // All languages need to be checked. 
+  
+  foreach ($entity_db->{$field_name} as $db_lc => &$db_items) {
+    foreach ($db_items as $db_delta => &$db_item) {
       // Conditions for deleting opposite relationship:
       $delete = false;
       
       // Delete relationships that no longer exist.
-      if (isset($rid_new[$db_item['relation_id']])) {
-        // Entity type has changed.
-        if ($rid_new[$db_item['relation_id']]['entity_type'] != $db_item['other_entity_type']) { $delete = true; }
-        // Entity ID has changed.
-        if ($rid_new[$db_item['relation_id']]['etid']        != $db_item['other_entity_id'])   { $delete = true; }
+      if (true === _relation_entity_has_relation_id($entity, $db_item['relation_id'], $field_name)) {
+        if (isset($rid_new[$db_item['relation_id']])) {
+          // Entity type has changed.
+          if ($rid_new[$db_item['relation_id']]['entity_type'] != $db_item['other_entity_type']) { $delete = true; }
+          // Entity ID has changed.
+          if ($rid_new[$db_item['relation_id']]['etid']        != $db_item['other_entity_id'])   { $delete = true; }
+        }
       } else {
+        $delete = true; // Deleted entirely
         // @todo: Delete the Relation entity.
-        $delete = true;
       }
       
       // A relationship has changed/removed. Delete relationship of other Entity.
