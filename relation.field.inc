@@ -87,9 +87,15 @@ function _relation_delete_relation($entity_type, $entity, $relation_id, $field_n
  * the fields that are submitted, and creating a mirror opposite of the relationship
  * on Relation field of entities that are submitted here.
  * 
+ * hook_field_presave() is executed once for every language supported by $entity.
+ * 
  * Creation/deletion of Relation Entities are done here.
  */
 function relation_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  if ($field['type'] != 'relation') {
+    return;
+  }
+  
   $field_name = $field['field_name'];
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
 
@@ -138,8 +144,8 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
   
   // Get old relationships
   $entity_db = entity_load_unchanged($entity_type, $id);
-  foreach ($entity_db->{$field_name} as $db_lc => &$db_items) {
-    foreach ($db_items as $db_delta => &$db_item) {
+  if (isset($entity_db->{$field_name}[$langcode])) {
+    foreach ($entity_db->{$field_name}[$langcode] as $db_delta => &$db_item) {
       // Conditions for deleting opposite relationship:
       $delete = false;
       
