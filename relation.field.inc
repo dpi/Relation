@@ -458,3 +458,27 @@ function relation_field_prepare_view($entity_type, $entities, $field, $instances
     }
   }
 }
+
+/**
+ * Implements hook_field_create_field().
+ * 
+ * When a user adds a Relation field for the first time, he does not get an
+ * option to choose translatable. Nor can we establish field type defaults in
+ * hook_field_info(). When a new field is created, we set the translate
+ * variable to OFF.
+ * 
+ * Rationale: Setting a field to non translatable forces the field to be shown
+ * on any translation of an entity, despite its current language. fsd fasdasdsad 
+ * 
+ * See field_ui_field_overview_form_submit() in field_ui.admin.inc.
+ * 
+ */
+function relation_field_create_field($field) {
+  if ($field['type'] == 'relation') {
+    $values = array(
+    	'field_name' => $field['field_name'],
+      'translatable' => FALSE,
+    );
+    field_update_field($values);
+  }
+}
