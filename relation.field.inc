@@ -149,7 +149,10 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     // Prevent duplicate relationships.
     if (empty($item['relation_id'])) {
       if (!_relation_entity_has_relation($entity_db, $item['other_entity_type'], $item['other_entity_id'], $field_name, $langcode)) {
-        $item['relation_id'] = db_next_id();
+        // Lazy add new relation entity - move to entity_create.
+        $record = array('field_name' => $field['field_name']);
+        drupal_write_record('relation', $record);
+        $item['relation_id'] = $record['relation_id'];
       } else {
         unset($items[$item_delta]);
         continue;
