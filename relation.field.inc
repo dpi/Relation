@@ -284,10 +284,11 @@ function relation_field_validate($entity_type, $entity, $field, $instance, $lang
     if (relation_field_is_empty($item, $field)) {
       continue;
     }
-    
-    $other = entity_load($item['other_entity_type'], array($item['other_entity_id']));
+
+    $others = entity_load($item['other_entity_type'], array($item['other_entity_id']));
+
     // Check that $other entity exists.
-    if (empty($other)) {
+    if (!isset($others[$item['other_entity_id']]) || empty($others)) {
       $errors[$field['field_name']][$langcode][$delta][] = array(
         'error' => 'relation_error_missing_other_entity',
         'message' => t('The %type entity %id does not exist.', array(
@@ -297,34 +298,42 @@ function relation_field_validate($entity_type, $entity, $field, $instance, $lang
       );
       continue;
     }
+
+    $other = $others[$item['other_entity_id']];
+
     // Check that $other's bundle has the field attached.
-    if (!isset($other[$item['other_entity_id']]->{$field['field_name']})) {
+    if (!isset($other->{$field['field_name']})) {
       $errors[$field['field_name']][$langcode][$delta][] = array(
         'error' => 'relation_error_missing_field',
-        'message' =>  t('The %bundle bundle does not have a %field_name field attached.', array(
-          '%bundle' => $other[$item['other_entity_id']]->type,
+        'message' => t('The %bundle bundle does not have a %field_name field attached.', array(
+          '%bundle' => $other->type,
           '%field_name' =>  $field['field_name'])
         ),
       );
       continue;
     }
+
     // Check that number of fields on $other is < cardinality.
-    if ($field['cardinality'] != -1 && count($other[0]->{fieldset}[$langcode] >= $field['cardinality'] )) {
+    if ($field['cardinality'] != -1 && isset($other->{$field['field_name']}[$langcode]) && count($other->{$field['field_name']}[$langcode]) >= $field['cardinality']) {
       // Check and see if one of the fields on $other is refering back to $entity.
       $exists = FALSE;
-      foreach ($other[0]->{fieldset}[$langcode] as $value) {
-        if ($value['other_entity_id'] == $item['other_entity_type']) {
+      foreach ($other->{$field['field_name']}[$langcode] as $other_value) {
+        if ($other_value['other_entity_id'] == $item['other_entity_id'] && $other_value['other_entity_type'] == $item['other_entity_type']) {
           $exists = TRUE;
           break;
         }
       }
-      if (!$exists) {
+      if ($exists) {
+        // Change $instance->cardinality to overcome this message.
+        // Or set to Unlimited.
         $errors[$field['field_name']][$langcode][$delta][] = array(
           'error' => 'relation_error_cardinality_max',
-          'message' =>  t('The %type entity %id is all full up. If you want to add more relations to it, you need to increase the field cardinality.', array(
+          'message' => t('The %type entity %id cannot accept any more `%label` relationship.', array(
             '%type' => $item['other_entity_type'],
-            '%id' =>  $item['other_entity_id'])
-          ),
+            '%id' => $item['other_entity_id'],
+            // Label for the instance of this Relation on this entity, not $other
+            '%label' => $instance['label'],
+          )),
         );
         continue;
       }
