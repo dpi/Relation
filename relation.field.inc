@@ -375,7 +375,31 @@ function relation_field_widget_form(&$form, &$form_state, $field, $instance, $la
     '#type' => 'textfield',
     '#default_value' => $items[$delta]['other_entity_id'],
   );
+
+  $relation_id = !empty($items[$delta]['relation_id']) ? $items[$delta]['relation_id'] : NULL;
+  if ($relation_id) {
+    $relation = entity_load('relation', array($relation_id));
+    
+    $element['relation_fields'] = array(
+    	'#type' => 'fieldset',
+      '#element_validate' => array('relation_field_fields_validate'),
+      '#title' => t('Relation Fields'),
+      '#description' => t('Special values for this relationship.'),
+      '#relation_entity' => $relation[$relation_id],
+    );
+    field_attach_form('relation', $relation[$relation_id], $element['relation_fields'], $form_state, $element['#language']);
+  }
+  
   return $element;
+}
+
+/**
+ * Implemenets Form API's #element_validate
+ */
+function relation_field_fields_validate(&$element, $form_state) {
+  field_attach_form_validate('relation', $element['#relation_entity'], $element, $form_state);
+  field_attach_submit('relation', $element['#relation_entity'], $element, $form_state);
+  entity_save('relation', $element['#relation_entity']);
 }
 
 /**

@@ -118,7 +118,7 @@ function relation_field_info_alter(&$field_info) {
  * is overriden to add the self join and to exclude rows where the left and
  * right entities are identical.
  */
-class RelationEntityController extends DrupalDefaultEntityController {
+class RelationEntityController extends EntityAPIController {
   /*
   protected function buildQuery($ids, $conditions = array(), $revision_id = FALSE) {
     $query = parent::buildQuery($ids, $conditions, $revision_id);
