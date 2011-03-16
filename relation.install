@@ -23,6 +23,12 @@ function relation_field_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      'other_bundle' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
       'other_entity_id' => array(
         'type' => 'int',
         'unsigned' => TRUE,

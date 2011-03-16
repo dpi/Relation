@@ -142,11 +142,16 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
   foreach ($items as $item_delta => &$item) {
     // Relation is new
     
+    $other = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
+    list( , , $other_bundle) = entity_extract_ids($item['other_entity_type'], $other);
+    
     $rid_new[$item['relation_id']] = array(
     	'entity_type' => $item['other_entity_type'],
     	'etid' => $item['other_entity_id'],
     );
-    
+
+    $item['other_bundle'] = $other_bundle;
+
     // Prevent duplicate relationships.
     if (empty($item['relation_id'])) {
       if (!_relation_entity_has_relation($entity_db, $item['other_entity_type'], $item['other_entity_id'], $field_name, $langcode)) {
@@ -157,14 +162,13 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
       }
     }
     
-    $other = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
-    
     $other_langcode = $langcode;
     
     if (false === _relation_entity_has_relation_id($other, $item['relation_id'], $field_name)) {
       $other->{$field_name}[$other_langcode][] = array( 
         'relation_id' => $item['relation_id'],
         'other_entity_type' => $entity_type,
+        'other_bundle' => $bundle,
         'other_entity_id' => $id,
         'other_revision_id' => NULL,
       );
@@ -295,6 +299,7 @@ function relation_field_widget_form(&$form, &$form_state, $field, $instance, $la
     $items[$delta] = array(
       'relation_id' => NULL,
       'other_entity_type' => '',
+      'other_bundle' => '',
       'other_entity_id' => '',
     );
   }
@@ -304,6 +309,12 @@ function relation_field_widget_form(&$form, &$form_state, $field, $instance, $la
     '#type' => 'value',
     '#value' => $items[$delta]['relation_id'],
   );
+
+  $element['other_bundle'] = array(
+    '#type' => 'value',
+    '#value' => $items[$delta]['other_bundle'],
+  );
+
   $element['other_entity_type'] = array(
     '#type' => 'select',
     '#title' => t('Entity type'),
