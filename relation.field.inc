@@ -448,6 +448,10 @@ function relation_field_formatter_view($entity_type, $entity, $field, $instance,
  * Implements hook_field_formatter_prepare_view().
  */
 function relation_field_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items, $displays) {
+  if ($field['type'] != 'relation') {
+    return;
+  }
+
   $entities_to_load = array();
   foreach ($items as $key => $item) {
     foreach ($item as $delta => $value) {
