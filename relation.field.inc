@@ -238,42 +238,34 @@ function relation_field_delete($entity_type, $entity, $field, $instance, $langco
  * relations to entities of the field instance need to be deleted.
  */
 function relation_field_delete_instance($instance) {
-  // Get other instances of same field type.
   $field_name = $instance['field_name'];
   $field = field_info_field($field_name);
-  
-  $entity_types = array(); // Entity types with instances of this field.
-  
-  if ($field['type'] == 'relation') {
-    $instances = field_read_instances(array('field_name' => $field_name));
-    foreach ($instances as $other_instance) {
-      $entity_types[$other_instance['entity_type']] = entity_load($other_instance['entity_type']);
-    }
+
+  if ($field['type'] != 'relation') {
+    return;
   }
-  
-  foreach ($entity_types as $entity_type => $entities) {
-    foreach ($entities as $etid => &$entity) {
-      // Check if a Relation has been created on this Entity.
+
+  // Get all entities that relate back to this instance
+  $other_entities_query = new EntityFieldQuery;
+
+  $other_types = $other_entities_query
+  ->fieldCondition($field_name, 'other_entity_type', $instance['entity_type'], '=')
+  ->fieldCondition($field_name, 'other_bundle', $instance['bundle'], '=')
+  ->execute();
+
+  foreach ($other_types as $other_entity_type => $other_entities) {
+    $other_entities = entity_load($other_entity_type, array_keys($other_entities));
+    foreach ($other_entities as $other_etid => $other_entity) {
       // $etid is checked in edge cases where there is a zero ID in database.
-      if ($etid && isset($entity->{$field_name})) {
-        foreach ($entity->{$field_name} as $lang => &$items) {
-          // Look through items, referencing to the bundle being deleted.
+      if ($other_etid && isset($other_entity->{$field_name})) {
+        foreach ($other_entity->{$field_name} as $lang => &$items) {
           foreach ($items as $delta => &$item) {
-            $entity_other = entity_load($item['other_entity_type'], array($item['other_entity_id']));
-            if (!empty($entity_other)) {
-              $entity_other = $entity_other[$item['other_entity_id']];
-              /**
-               * Check if Relation field in other is still there.
-               * Another method is to check against the bundle, but that
-               * would require an additional call to entity_extract_ids().
-               */ 
-              if ($entity_other && !isset($entity_other->{$field_name})) {
-                unset($items[$delta]);
-              }
+            if ($item['other_entity_type'] == $instance['entity_type'] && $item['other_bundle'] == $instance['bundle']) {
+              unset($items[$delta]);
             }
           }
         }
-        entity_save($entity_type, $entity);
+        entity_save($other_entity_type, $other_entity);
       }
     }
   }
