@@ -44,12 +44,12 @@ function _relation_entity_has_relation_id($entity, $relation_id, $field_name) {
   foreach ($entity->{$field_name} as $lang => $items) {
     foreach ($items as $delta => $item) {
       if ($item['relation_id'] == $relation_id) {
-        return true;
+        return TRUE;
       }
     }
   }
   
-  return false;
+  return FALSE;
 }
 
 /**
@@ -72,12 +72,12 @@ function _relation_entity_has_relation($entity, $other_entity_type, $other_etid,
   if (isset($entity->{$field_name}[$langcode])) {
     foreach ($entity->{$field_name}[$langcode] as $delta => $item) {
       if ($item['other_entity_type'] == $other_entity_type && $item['other_entity_id'] == $other_etid) {
-        return true;
+        return TRUE;
       }
     }
   }
   
-  return false;
+  return FALSE;
 }
 /**
  * Remove a relationship from an Entity.
@@ -104,7 +104,7 @@ function _relation_delete_relation($entity_type, $entity, $relation_id, $field_n
   }
   
   // @todo: Figure out how to get around recursion issues.
-  $entity->relation_recursion = true;
+  $entity->relation_recursion = TRUE;
   entity_save($entity_type, $entity);
 }
 
@@ -146,8 +146,8 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     list( , , $other_bundle) = entity_extract_ids($item['other_entity_type'], $other);
     
     $rid_new[$item['relation_id']] = array(
-    	'entity_type' => $item['other_entity_type'],
-    	'etid' => $item['other_entity_id'],
+      'entity_type' => $item['other_entity_type'],
+      'etid' => $item['other_entity_id'],
     );
 
     $item['other_bundle'] = $other_bundle;
@@ -164,7 +164,7 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
     
     $other_langcode = $langcode;
     
-    if (false === _relation_entity_has_relation_id($other, $item['relation_id'], $field_name)) {
+    if (FALSE === _relation_entity_has_relation_id($other, $item['relation_id'], $field_name)) {
       $other->{$field_name}[$other_langcode][] = array( 
         'relation_id' => $item['relation_id'],
         'other_entity_type' => $entity_type,
@@ -173,7 +173,7 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
         'other_revision_id' => NULL,
       );
       
-      $other->relation_recursion = true;
+      $other->relation_recursion = TRUE;
       $result = entity_save($item['other_entity_type'], $other);
       unset($other->relation_recursion);
     }
@@ -190,18 +190,23 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
   foreach ($entity_db->{$field_name} as $db_lc => &$db_items) {
     foreach ($db_items as $db_delta => &$db_item) {
       // Conditions for deleting opposite relationship:
-      $delete = false;
+      $delete = FALSE;
       
       // Delete relationships that no longer exist.
-      if (true === _relation_entity_has_relation_id($entity, $db_item['relation_id'], $field_name)) {
+      if (TRUE === _relation_entity_has_relation_id($entity, $db_item['relation_id'], $field_name)) {
         if (isset($rid_new[$db_item['relation_id']])) {
           // Entity type has changed.
-          if ($rid_new[$db_item['relation_id']]['entity_type'] != $db_item['other_entity_type']) { $delete = true; }
+          if ($rid_new[$db_item['relation_id']]['entity_type'] != $db_item['other_entity_type']) {
+            $delete = TRUE;
+          }
           // Entity ID has changed.
-          if ($rid_new[$db_item['relation_id']]['etid']        != $db_item['other_entity_id'])   { $delete = true; }
+          if ($rid_new[$db_item['relation_id']]['etid'] != $db_item['other_entity_id']) {
+            $delete = TRUE;
+          }
         }
+        
       } else {
-        $delete = true; // Deleted entirely
+        $delete = TRUE; // Deleted entirely
         // @todo: Delete the Relation entity.
       }
       
