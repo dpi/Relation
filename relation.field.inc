@@ -211,18 +211,16 @@ function relation_field_presave($entity_type, $entity, $field, $instance, $langc
 /**
  * Implements hook_field_delete().
  *
- * This hook is invoked when an entity is deleted. All entities that are
+ * This hook is invoked when an invidiual Entity is deleted. All entities that are
  * referencing the deleted entity need to be updated to remove the relation(s).
  */
 function relation_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
-  list($entity_id) = entity_extract_ids($entity_type, $entity);
-  $result = db_query('SELECT relation_id FROM {relation_data} WHERE entity_type = :entity_type AND entity_id = :entity_id', array(
-    ':entity_type' => $entity_type,
-    ':entity_id' => $entity_id,
-  ));
-  foreach ($result as $row) {
-    db_delete('relation')->condition('relation_id', $row->relation_id)->execute();
-    db_delete('relation_data')->condition('relation_id', $row->relation_id)->execute();
+  $field_name = $field['field_name'];
+  // Delete all references to this item, from other Entities.
+  // Entities this Entity is referencing will be deleted by Field API.
+  foreach ($items as &$item) {
+    $entity_db = entity_load_unchanged($item['other_entity_type'], $item['other_entity_id']);
+    _relation_delete_relation($item['other_entity_type'], $entity_db, $item['relation_id'], $field_name);
   }
 }
 
