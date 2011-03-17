@@ -174,7 +174,7 @@ function relation_field_validate($entity_type, $entity, $field, $instance, $lang
       }
       if (!$exists) {
         $errors[$field['field_name']][$langcode][$delta][] = array(
-          'error' => 'relation_error_missing_field',
+          'error' => 'relation_error_cardinality_max',
           'message' =>  t('The %type entity %id is all full up. If you want to add more relations to it, you need to increase the field cardinality.', array(
             '%type' => $item['other_entity_type'],
             '%id' =>  $item['other_entity_id'])
@@ -227,6 +227,26 @@ function relation_field_widget_form(&$form, &$form_state, $field, $instance, $la
     '#default_value' => $items[$delta]['other_entity_id'],
   );
   return $element;
+}
+
+/**
+ * Implement hook_field_widget_error()
+ */
+function relation_field_widget_error($element, $error, $form, &$form_state) {
+  switch ($error['error']) {
+    case 'relation_error_missing_field':
+      form_error($element['other_entity_type'], $error['message']);
+      break;
+    case 'relation_error_missing_other_entity':
+      form_error($element['other_entity_id'], $error['message']);
+      break;
+    case 'relation_error_cardinality_max':
+      form_error($element['other_entity_id'], $error['message']);
+      break;
+    default:
+      form_error($element, $error['message']);
+      break;
+  }
 }
 
 /**
